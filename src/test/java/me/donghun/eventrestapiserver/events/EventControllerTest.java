@@ -70,8 +70,30 @@ class EventControllerTest {
 
     @Test
     @DisplayName("이벤트 생성 - 빈 입력")
-    void createEventEmptyInputs() throws Exception {
+    void createEventEmptyInput() throws Exception {
         EventDto eventDto = EventDto.builder().build();
+
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("이벤트 생성 - 잘못된 입력")
+    void createEventWrongInput() throws Exception {
+        EventDto eventDto = EventDto.builder()
+                .name("Spring")
+                .description("REST API")
+                .beginEnrollmentDateTime(LocalDateTime.of(2021, 9, 12, 20, 30))
+                .closeEnrollmentDateTime(LocalDateTime.of(2021, 9, 11, 20, 30))
+                .beginEventDateTime(LocalDateTime.of(2021, 9, 10, 20, 30))
+                .endEventDateTime(LocalDateTime.of(2021, 9, 9, 20, 30))
+                .basePrice(10000)
+                .maxPrice(200)
+                .limitOfEnrollment(100)
+                .location("강남역")
+                .build();
 
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
