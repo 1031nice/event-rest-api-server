@@ -2,6 +2,7 @@ package me.donghun.eventrestapiserver.events;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ class EventControllerTest {
     EventRepository eventRepository;
 
     @Test
+    @DisplayName("이벤트 생성")
     void createEvent() throws Exception {
         Event event = Event.builder()
                 .id(123456789)
@@ -64,6 +66,17 @@ class EventControllerTest {
                 .andExpect(header().exists(HttpHeaders.LOCATION))
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, MediaTypes.HAL_JSON_VALUE))
                 .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 생성 - 빈 입력")
+    void createEventEmptyInputs() throws Exception {
+        EventDto eventDto = EventDto.builder().build();
+
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(status().isBadRequest());
     }
 
 }
