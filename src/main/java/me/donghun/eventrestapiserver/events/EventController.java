@@ -1,5 +1,6 @@
 package me.donghun.eventrestapiserver.events;
 
+import me.donghun.eventrestapiserver.common.ErrorsModel;
 import org.modelmapper.ModelMapper;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.MediaTypes;
@@ -33,12 +34,12 @@ public class EventController {
     @PostMapping
     public ResponseEntity createEvent(@RequestBody @Valid EventDto eventDto, Errors errors) {
         if(errors.hasErrors()) {
-            return ResponseEntity.badRequest().body(errors);
+            return ResponseEntity.badRequest().body(new ErrorsModel(errors));
         }
 
         eventValidator.validate(eventDto, errors);
         if(errors.hasErrors()) {
-            return ResponseEntity.badRequest().body(errors);
+            return ResponseEntity.badRequest().body(new ErrorsModel(errors));
         }
 
         Event event = modelMapper.map(eventDto, Event.class);
@@ -47,11 +48,11 @@ public class EventController {
         Event newEvent = eventRepository.save(event);
         WebMvcLinkBuilder selfLinkBuilder = linkTo(EventController.class).slash(newEvent.getId());
         URI createdUri = selfLinkBuilder.toUri();
-        EventResource eventResource = new EventResource(event);
-        eventResource.add(linkTo(EventController.class).withRel("query"));
-        eventResource.add(selfLinkBuilder.withRel("update"));
-        eventResource.add(Link.of("/docs/index.html@resources-events-create").withRel("profile"));
-        return ResponseEntity.created(createdUri).body(eventResource);
+        EventModel eventModel = new EventModel(event);
+        eventModel.add(linkTo(EventController.class).withRel("query"));
+        eventModel.add(selfLinkBuilder.withRel("update"));
+        eventModel.add(Link.of("/docs/index.html@resources-events-create").withRel("profile"));
+        return ResponseEntity.created(createdUri).body(eventModel);
     }
 
 }

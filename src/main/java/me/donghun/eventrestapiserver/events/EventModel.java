@@ -5,12 +5,12 @@ import org.springframework.hateoas.RepresentationModel;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
-public class EventResource extends RepresentationModel {
+public class EventModel extends RepresentationModel<EventModel> {
 
     @JsonUnwrapped
-    private Event event;
+    private final Event event;
 
-    public EventResource(Event event) {
+    public EventModel(Event event) {
         this.event = event;
         add(linkTo(EventController.class).slash(event.getId()).withSelfRel());
     }
