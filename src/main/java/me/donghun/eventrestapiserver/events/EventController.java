@@ -79,4 +79,33 @@ public class EventController {
         }
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity updateEvents(@RequestBody @Valid EventDto eventDto,
+                                       Errors errors,
+                                       @PathVariable Integer id) {
+        Optional<Event> optionalEvent = eventRepository.findById(id);
+        if(optionalEvent.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        else if(errors.hasErrors()) {
+            return ResponseEntity.badRequest().body(new ErrorsModel(errors));
+        }
+
+        eventValidator.validate(eventDto, errors);
+        if(errors.hasErrors()) {
+            return ResponseEntity.badRequest().body(new ErrorsModel(errors));
+        }
+
+        Event existingEvent = optionalEvent.get();
+        modelMapper.map(eventDto, existingEvent);
+        // TODO EventService
+        existingEvent.update();
+        // transaction이 아니기 때문에 dirty checking에 의해 write behind 되지 않아서 명시적으로 save 호출
+        Event updatedEvent = eventRepository.save(existingEvent);
+        EventModel eventModel = new EventModel(updatedEvent);
+        eventModel.add(Link.of("/docs/index.html#resources-events-update").withRel("profile"));
+        return ResponseEntity.ok(eventModel);
+    }
+
 }

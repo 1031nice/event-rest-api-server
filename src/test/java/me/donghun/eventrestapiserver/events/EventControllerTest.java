@@ -16,15 +16,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.stream.IntStream;
 
+import static org.hamcrest.Matchers.*;
 import static org.springframework.restdocs.headers.HeaderDocumentation.*;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.linkWithRel;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.links;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -138,7 +139,7 @@ class EventControllerTest {
     }
 
     @Test
-    @DisplayName("이벤트 생성 - 잘못된 입력")
+    @DisplayName("이벤트 생성 - 잘못된 입력(비즈니스 로직에 맞지 않는 경우)")
     void createEventsWrongInputs() throws Exception {
         EventDto eventDto = EventDto.builder()
                 .name("Spring")
@@ -157,14 +158,38 @@ class EventControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(eventDto)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("errors[0].objectName").exists())
-                .andExpect(jsonPath("errors[0].defaultMessage").exists())
+                .andExpect(jsonPath("errors[*].field").value(containsInAnyOrder("basePrice", "maxPrice", "endEventDateTime")))
                 .andExpect(jsonPath("_links.index").exists())
                 .andDo(print());
     }
 
     @Test
-    @DisplayName("이벤트 목록 조회 - 전체 30개 이벤트를 페이지당 10개씩 배치하여 두 번째 페이지 조회")
+    @DisplayName("이벤트 생성 - 잘못된 입력(값 자체가 잘못된 경우)")
+    void createEventsWrongInputs2() throws Exception {
+        EventDto eventDto = EventDto.builder()
+                .name("")
+                .description("REST API")
+                .beginEnrollmentDateTime(LocalDateTime.of(2021, 9, 12, 20, 30))
+                .closeEnrollmentDateTime(LocalDateTime.of(2021, 9, 11, 20, 30))
+                .beginEventDateTime(LocalDateTime.of(2021, 9, 10, 20, 30))
+                .endEventDateTime(LocalDateTime.of(2021, 9, 9, 20, 30))
+                .basePrice(-1)
+                .maxPrice(200)
+                .limitOfEnrollment(100)
+                .location("강남역")
+                .build();
+
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("errors[*].field").value(containsInAnyOrder("name", "basePrice")))
+                .andExpect(jsonPath("_links.index").exists())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 목록 조회 - 전체 30개 이벤트 / 페이지당 10개 / 두 번째 페이지 조회")
     void getEventsList() throws Exception {
         IntStream.range(0, 30).forEach(this::generateEvents);
 
@@ -198,6 +223,14 @@ class EventControllerTest {
         Event event = Event.builder()
                 .name("event" + i)
                 .description("test event")
+                .beginEnrollmentDateTime(LocalDateTime.of(2021, 9, 9, 20, 30))
+                .closeEnrollmentDateTime(LocalDateTime.of(2021, 9, 10, 20, 30))
+                .beginEventDateTime(LocalDateTime.of(2021, 9, 11, 20, 30))
+                .endEventDateTime(LocalDateTime.of(2021, 9, 12, 20, 30))
+                .basePrice(100)
+                .maxPrice(200)
+                .limitOfEnrollment(100)
+                .location("강남역")
                 .build();
 
         return this.eventRepository.save(event);
@@ -214,15 +247,89 @@ class EventControllerTest {
                 .andExpect(jsonPath("id").exists())
                 .andExpect(jsonPath("_links.self").exists())
                 .andExpect(jsonPath("_links.profile").exists())
-                .andDo(document("get-events"))
+                .andDo(document("get-events")) // TODO 문서화
                 .andDo(print());
     }
 
     @Test
     @DisplayName("이벤트 조회 - 없는 이벤트")
-    void getEventsWrongInputs() throws Exception {
+    void getEventsNotFound() throws Exception {
         mockMvc.perform(get("/api/events/987654321"))
                 .andExpect(status().isNotFound())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 수정")
+    void updateEvents() throws Exception {
+        Event event = generateEvents(987654321);
+
+        EventDto eventDto = objectMapper.convertValue(event, EventDto.class);
+        eventDto.setName("new name");
+        eventDto.setDescription("new description");
+
+        mockMvc.perform(put("/api/events/{id}", event.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(jsonPath("name").value(eventDto.getName()))
+                .andExpect(jsonPath("description").value(eventDto.getDescription()))
+                .andExpect(jsonPath("id").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andDo(document("update-events")) // TODO 문서화
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 수정 - 없는 이벤트")
+    void updateEventsNotFound() throws Exception {
+        EventDto eventDto = EventDto.builder()
+                .name("new name")
+                .description("new description")
+                .build();
+
+        mockMvc.perform(put("/api/events/98765432")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(status().isNotFound())
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 수정 - 잘못된 입력(값 자체가 잘못된 경우)")
+    void updateEventsWrongInputs() throws Exception {
+        Event event = generateEvents(987654321);
+
+        EventDto eventDto = objectMapper.convertValue(event, EventDto.class);
+        eventDto.setName("new name");
+        eventDto.setDescription("");
+        eventDto.setBasePrice(-1);
+
+        mockMvc.perform(put("/api/events/{id}", event.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("_links.index").exists())
+                .andExpect(jsonPath("errors[*].field").value(containsInAnyOrder("basePrice", "description")))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 수정 - 잘못된 입력(비즈니스 로직에 맞지 않는 경우)")
+    void updateEventsWrongInputs2() throws Exception {
+        Event event = generateEvents(987654321);
+
+        EventDto eventDto = objectMapper.convertValue(event, EventDto.class);
+        eventDto.setBasePrice(2);
+        eventDto.setMaxPrice(1);
+        eventDto.setEndEventDateTime(event.getBeginEventDateTime().minus(1L, ChronoUnit.DAYS));
+
+        mockMvc.perform(put("/api/events/{id}", event.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventDto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("_links.index").exists())
+                .andExpect(jsonPath("errors[*].field").value(containsInAnyOrder("basePrice", "maxPrice", "endEventDateTime")))
                 .andDo(print());
     }
 
