@@ -164,8 +164,8 @@ class EventControllerTest {
     }
 
     @Test
-    @DisplayName("이벤트 조회 - 전체 30개 이벤트를 페이지당 10개씩 배치하여 두 번째 페이지 조회")
-    public void eventsList() throws Exception {
+    @DisplayName("이벤트 목록 조회 - 전체 30개 이벤트를 페이지당 10개씩 배치하여 두 번째 페이지 조회")
+    void getEventsList() throws Exception {
         IntStream.range(0, 30).forEach(this::generateEvents);
 
         mockMvc.perform(get("/api/events")
@@ -194,13 +194,36 @@ class EventControllerTest {
                 .andDo(print());
     }
 
-    private void generateEvents(int i) {
+    private Event generateEvents(int i) {
         Event event = Event.builder()
                 .name("event" + i)
                 .description("test event")
                 .build();
 
-        this.eventRepository.save(event);
+        return this.eventRepository.save(event);
+    }
+
+    @Test
+    @DisplayName("이벤트 조회")
+    void getEvents() throws Exception {
+        Event event = generateEvents(987654321);
+
+        mockMvc.perform(get("/api/events/{id}", event.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("name").exists())
+                .andExpect(jsonPath("id").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andDo(document("get-events"))
+                .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 조회 - 없는 이벤트")
+    void getEventsWrongInputs() throws Exception {
+        mockMvc.perform(get("/api/events/987654321"))
+                .andExpect(status().isNotFound())
+                .andDo(print());
     }
 
 }
