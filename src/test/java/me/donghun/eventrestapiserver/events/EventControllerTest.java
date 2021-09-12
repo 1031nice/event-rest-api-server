@@ -16,12 +16,14 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.stream.IntStream;
 
 import static org.springframework.restdocs.headers.HeaderDocumentation.*;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.linkWithRel;
 import static org.springframework.restdocs.hypermedia.HypermediaDocumentation.links;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -43,7 +45,7 @@ class EventControllerTest {
 
     @Test
     @DisplayName("이벤트 생성")
-    void createEvent() throws Exception {
+    void createEvents() throws Exception {
         EventDto eventDto = EventDto.builder()
                 .name("Spring")
                 .description("REST API")
@@ -69,8 +71,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("eventStatus").value(Matchers.not(EventStatus.PUBLISHED.name())))
                 .andExpect(header().exists(HttpHeaders.LOCATION))
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, MediaTypes.HAL_JSON_VALUE))
-                .andDo(print())
-                .andDo(document("create-event",
+                .andDo(document("create-events",
                         links(
                                 linkWithRel("self").description("link to self"),
                                 linkWithRel("query").description("link to query event"),
@@ -117,12 +118,13 @@ class EventControllerTest {
                                 fieldWithPath("_links.update.href").description("link to update event"),
                                 fieldWithPath("_links.profile.href").description("link to profile")
                         )
-                ));
+                ))
+                .andDo(print());
     }
 
     @Test
     @DisplayName("이벤트 생성 - 빈 입력")
-    void createEventEmptyInput() throws Exception {
+    void createEventsEmptyInputs() throws Exception {
         EventDto eventDto = EventDto.builder().build();
 
         mockMvc.perform(post("/api/events")
@@ -137,7 +139,7 @@ class EventControllerTest {
 
     @Test
     @DisplayName("이벤트 생성 - 잘못된 입력")
-    void createEventWrongInput() throws Exception {
+    void createEventsWrongInputs() throws Exception {
         EventDto eventDto = EventDto.builder()
                 .name("Spring")
                 .description("REST API")
@@ -159,6 +161,46 @@ class EventControllerTest {
                 .andExpect(jsonPath("errors[0].defaultMessage").exists())
                 .andExpect(jsonPath("_links.index").exists())
                 .andDo(print());
+    }
+
+    @Test
+    @DisplayName("이벤트 조회 - 전체 30개 이벤트를 페이지당 10개씩 배치하여 두 번째 페이지 조회")
+    public void eventsList() throws Exception {
+        IntStream.range(0, 30).forEach(this::generateEvents);
+
+        mockMvc.perform(get("/api/events")
+                        .param("page", "1") // 두 번째 페이지
+                        .param("size", "10")
+                        .param("sort", "name,DESC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("page").exists())
+                .andExpect(jsonPath("_embedded.eventModelList[0]._links.self").exists())
+                .andExpect(jsonPath("_links.first").exists())
+                .andExpect(jsonPath("_links.prev").exists())
+                .andExpect(jsonPath("_links.self").exists())
+                .andExpect(jsonPath("_links.next").exists())
+                .andExpect(jsonPath("_links.last").exists())
+                .andExpect(jsonPath("_links.profile").exists())
+                .andDo(document("events-list",
+                        links(
+                                linkWithRel("first").description("link to first page"),
+                                linkWithRel("prev").description("link to previous page"),
+                                linkWithRel("self").description("link to self page"),
+                                linkWithRel("next").description("link to next page"),
+                                linkWithRel("last").description("link to last page"),
+                                linkWithRel("profile").description("link to profile")
+                        )
+                ))
+                .andDo(print());
+    }
+
+    private void generateEvents(int i) {
+        Event event = Event.builder()
+                .name("event" + i)
+                .description("test event")
+                .build();
+
+        this.eventRepository.save(event);
     }
 
 }
